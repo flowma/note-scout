@@ -57,7 +57,9 @@ Browsers-saved melodies are stored under the `noteScout.melodies.v1` key in `loc
 
 ## Files
 
-- [`index.html`](index.html) — the entire app (markup, styles, and logic).
+- [`index.html`](index.html) — page markup and structure.
+- [`styles.css`](styles.css) — styling.
+- [`app.js`](app.js) — application logic (melody loading, playback, recording, rendering).
 - [`melodies.json`](melodies.json) — shipped melody definitions.
 - [`lang/en.js`](lang/en.js) — English UI strings.
 - [`lang/de.js`](lang/de.js) — German UI strings.

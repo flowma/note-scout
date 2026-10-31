@@ -1,7 +1,7 @@
 window.I18N = window.I18N || {};
 window.I18N.de = {
     appTitle: "Note Scout",
-    appHeading: "Note Scout - Kernmodell",
+    appHeading: "Note Scout",
     intro: "Wähle unten einen Melodie-Link, klicke <strong>Titel anhören</strong>, um dir die Melodie einzuprägen, und dann <strong>Singen &amp; Aufnehmen</strong>, um mit der Begleitspur zu singen. Klicke auf den Schlüssel in der Notenzeile, um zwischen Violinschlüssel 8vb und Bassschlüssel zu wechseln. Klicke auf eine beliebige Zielnote, um sie einzeln anzuhören. Verwende beim Aufnehmen Kopfhörer, damit die Begleitspur nicht ins Mikrofon gelangt.",
     notesLabel: "Noten:",
     nameLabel: "Name:",

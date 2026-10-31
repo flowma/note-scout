@@ -1,7 +1,7 @@
 window.I18N = window.I18N || {};
 window.I18N.en = {
     appTitle: "Note Scout",
-    appHeading: "Note Scout - Core Model",
+    appHeading: "Note Scout",
     intro: "Select a melody link below, click <strong>Listen Track</strong> to memorize, then click <strong>Sing &amp; Record</strong> to perform with the guide track playing. Click the clef on the staff to switch between treble 8vb and bass. Click any target note to preview it individually. Use headphones while recording to keep the guide track out of the microphone.",
     notesLabel: "Notes:",
     nameLabel: "Name:",
