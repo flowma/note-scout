@@ -36,6 +36,9 @@ function applyTranslations() {
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
     });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        el.setAttribute('title', t(el.getAttribute('data-i18n-title')));
+    });
     document.querySelectorAll('[data-i18n-aria]').forEach(el => {
         el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
     });
@@ -61,7 +64,11 @@ applyTranslations();
 
 const LOCAL_STORAGE_KEY = 'noteScout.melodies.v1';
 const LEGACY_STORAGE_KEYS = ['vocalPitchCoach.melodies.v1'];
-const RECORDING_LEAD_IN_SECONDS = 1;
+const RECORDING_LEAD_IN_BEATS = 2;
+const PITCH_RMS_GATE = 0.002;
+const SCHEDULING_DELAY_SECONDS = 0.35;
+const DEFAULT_BPM = 90;
+const DIAGNOSTIC_LOGGING = false;
 const NOTE_OFFSETS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const LETTER_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 const CLEFS = {
@@ -274,6 +281,21 @@ function writeLocalMelodyDefinitions(definitions) {
     }
 }
 
+function bpmToSecondsPerBeat(bpm) {
+    return 60 / bpm;
+}
+
+function readBpm(definition, fallbackBpm) {
+    const rawBpm = Number(definition && definition.bpm);
+    if (Number.isFinite(rawBpm) && rawBpm > 0) return rawBpm;
+    // Backwards compatibility for older saved melodies that stored secondsPerBeat.
+    const legacySecondsPerBeat = Number(definition && definition.secondsPerBeat);
+    if (Number.isFinite(legacySecondsPerBeat) && legacySecondsPerBeat > 0) {
+        return 60 / legacySecondsPerBeat;
+    }
+    return fallbackBpm;
+}
+
 async function loadMelodies() {
     const response = await fetch('melodies.json', { cache: 'no-cache' });
     if (!response.ok) {
@@ -283,13 +305,10 @@ async function loadMelodies() {
     if (!Array.isArray(data.melodies) || data.melodies.length === 0) {
         throw new Error('melodies.json must contain a non-empty "melodies" array.');
     }
-    const rawSecondsPerBeat = Number(data.secondsPerBeat);
-    const secondsPerBeat = Number.isFinite(rawSecondsPerBeat) && rawSecondsPerBeat > 0
-        ? rawSecondsPerBeat
-        : 0.6;
+    const defaultBpm = readBpm(data, DEFAULT_BPM);
     const melodies = {};
 
-    const addMelody = (definition, defaultSecondsPerBeat, source) => {
+    const addMelody = (definition, fallbackBpm, source) => {
         if (!definition.id || !definition.name || typeof definition.notes !== 'string') {
             throw new Error('Each melody needs an id, name, and notes string.');
         }
@@ -305,16 +324,14 @@ async function loadMelodies() {
             }
             definition.id = id;
         }
-        const definitionSecondsPerBeat = Number(definition.secondsPerBeat);
-        const melodySecondsPerBeat = Number.isFinite(definitionSecondsPerBeat) && definitionSecondsPerBeat > 0
-            ? definitionSecondsPerBeat
-            : defaultSecondsPerBeat;
+        const melodyBpm = readBpm(definition, fallbackBpm);
+        const melodySecondsPerBeat = bpmToSecondsPerBeat(melodyBpm);
         const parsed = parseNotes(definition.notes, melodySecondsPerBeat);
         melodies[id] = {
             id: id,
             name: definition.name,
             rawNotes: definition.notes,
-            secondsPerBeat: melodySecondsPerBeat,
+            bpm: melodyBpm,
             source: source,
             notes: parsed.notes,
             bars: parsed.bars,
@@ -322,12 +339,12 @@ async function loadMelodies() {
         };
     };
 
-    data.melodies.forEach(melody => addMelody(melody, secondsPerBeat, 'server'));
+    data.melodies.forEach(melody => addMelody(melody, defaultBpm, 'server'));
 
     const localMelodyDefs = [];
     readLocalMelodyDefinitions().forEach(definition => {
         try {
-            addMelody(definition, secondsPerBeat, 'local');
+            addMelody(definition, defaultBpm, 'local');
             localMelodyDefs.push(definition);
         } catch (err) {
             console.warn('Skipping invalid saved melody.', err);
@@ -344,7 +361,7 @@ async function loadMelodies() {
     return {
         melodies: melodies,
         localMelodyDefs: localMelodyDefs,
-        secondsPerBeat: secondsPerBeat
+        bpm: defaultBpm
     };
 }
 
@@ -362,7 +379,7 @@ const PIANO_SAMPLES = {
 };
 
 class VocalCoachUI {
-    constructor(melodies, localMelodyDefs, secondsPerBeat) {
+    constructor(melodies, localMelodyDefs, bpm) {
         this.scoreHost = document.getElementById('scoreHost');
         this.overlayCanvas = document.getElementById('coachOverlay');
         this.overlayCtx = this.overlayCanvas.getContext('2d');
@@ -383,13 +400,18 @@ class VocalCoachUI {
         this.currentMode = 'idle';
         this.startTime = 0;
         this.userHistory = [];
+        this.pitchSamples = [];
+        this.pitchDebug = null;
+        this.pitchLogState = { lastKind: null, lastLogAt: -Infinity };
+        this.lastTargetNote = null;
+        this.guideToneUserOverridden = false;
         this.melodies = melodies;
         this.activeMelody = melodies[Object.keys(melodies)[0]];
         this.localMelodyDefs = localMelodyDefs || [];
-        this.secondsPerBeat = secondsPerBeat || 0.6;
+        this.bpm = bpm || DEFAULT_BPM;
         this.activeNotes = [];
         this.activeBars = [];
-        this.activeSpeed = 0.6;
+        this.activeSpeed = 1.0;
         this.totalDuration = 3.5;
         this.hoverNote = null;
         this.clefMode = 'treble8vb';
@@ -419,13 +441,18 @@ class VocalCoachUI {
         this.drawPitchChart(-1, null, null);
     }
 
-    getSpeedFactor() {
+    getTempoBpm() {
         const value = parseFloat(document.getElementById('speedRange').value);
-        return Number.isFinite(value) ? value : 0.6;
+        return Number.isFinite(value) && value > 0 ? value : DEFAULT_BPM;
+    }
+
+    getSpeedFactor() {
+        const baseBpm = this.activeMelody ? this.activeMelody.bpm : DEFAULT_BPM;
+        return this.getTempoBpm() / baseBpm;
     }
 
     updateSpeedLabel() {
-        document.getElementById('speedValue').textContent = this.getSpeedFactor().toFixed(2) + 'x';
+        document.getElementById('speedValue').textContent = Math.round(this.getTempoBpm()) + ' BPM';
     }
 
     getClef() {
@@ -783,7 +810,7 @@ class VocalCoachUI {
                 color = '#ef4444';
             }
 
-            if (previousPoint && pt.time - previousPoint.time <= 0.2) {
+            if (previousPoint && pt.time - previousPoint.time <= 0.3) {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -857,6 +884,7 @@ class VocalCoachUI {
         if (!melody) return;
         this.activeMelody = melody;
         this.userHistory = [];
+        this.pitchSamples = [];
         this.hoverNote = null;
         this.hoverPitchNote = null;
         this.currentNote = null;
@@ -884,7 +912,7 @@ class VocalCoachUI {
 
         let parsed;
         try {
-            parsed = parseNotes(notesText, this.secondsPerBeat);
+            parsed = parseNotes(notesText, bpmToSecondsPerBeat(this.bpm));
         } catch (err) {
             this.setStatus(t('statusCannotSave', { error: err.message }));
             return;
@@ -900,7 +928,7 @@ class VocalCoachUI {
             id: id,
             name: name,
             notes: notesText,
-            secondsPerBeat: this.secondsPerBeat
+            bpm: this.bpm
         };
         if (existingIndex >= 0) {
             this.localMelodyDefs[existingIndex] = definition;
@@ -913,7 +941,7 @@ class VocalCoachUI {
             id: id,
             name: name,
             rawNotes: notesText,
-            secondsPerBeat: this.secondsPerBeat,
+            bpm: this.bpm,
             source: 'local',
             notes: parsed.notes,
             bars: parsed.bars,
@@ -926,6 +954,7 @@ class VocalCoachUI {
         });
         this.activeMelody = this.melodies[id];
         this.userHistory = [];
+        this.pitchSamples = [];
         this.hoverNote = null;
         this.hoverPitchNote = null;
         this.updateClef();
@@ -959,6 +988,7 @@ class VocalCoachUI {
             this.updateSpeedLabel();
             if (this.currentMode === 'idle') {
                 this.userHistory = [];
+                this.pitchSamples = [];
                 this.hoverNote = null;
                 this.refreshTimeline();
                 this.renderStatic();
@@ -968,6 +998,19 @@ class VocalCoachUI {
         document.getElementById('btnPlay').addEventListener('click', () => this.playTarget());
         document.getElementById('btnRecord').addEventListener('click', () => this.startRecording());
         document.getElementById('btnStop').addEventListener('click', () => this.stopEngine());
+
+        this.guideToneToggle = document.getElementById('guideToneToggle');
+        this.guideToggleLabel = document.querySelector('.guide-toggle');
+        if (this.guideToneToggle) {
+            this.guideToneToggle.addEventListener('change', () => {
+                // Once the user toggles the box manually, stop auto-enabling it.
+                this.guideToneUserOverridden = true;
+                if (this.guideToggleLabel) this.guideToggleLabel.classList.remove('is-auto');
+            });
+        }
+        // Best-effort detection on load; device labels may be empty until the
+        // microphone permission is granted, in which case this runs again.
+        this.autoEnableGuideForHeadphones();
 
         this.scoreHost.addEventListener('click', (e) => {
             const { x, y } = this.getCanvasCoords(e);
@@ -1033,6 +1076,34 @@ class VocalCoachUI {
 
     setStatus(message) {
         document.getElementById('audioStatus').textContent = message;
+    }
+
+    async detectHeadphones() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return false;
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const labels = devices
+                .map(device => device.label || '')
+                .join(' ')
+                .toLowerCase();
+            // Only trust explicit headphone/headset labels. Counting output
+            // devices is unreliable: macOS lists several audio outputs even
+            // when nothing is plugged in, which caused false auto-enable.
+            return /(headphone|headset|earbud|earphone|airpods|kopfhörer|kopfhoerer)/.test(labels);
+        } catch (err) {
+            return false;
+        }
+    }
+
+    async autoEnableGuideForHeadphones() {
+        if (!this.guideToneToggle) return;
+        if (this.guideToneUserOverridden) return; // Respect a manual checkbox change.
+        const hasHeadphones = await this.detectHeadphones();
+        if (hasHeadphones && !this.guideToneToggle.checked) {
+            this.guideToneToggle.checked = true;
+            if (this.guideToggleLabel) this.guideToggleLabel.classList.add('is-auto');
+            this.setStatus(t('guideToneAuto'));
+        }
     }
 
     async ensurePianoSamples() {
@@ -1131,6 +1202,31 @@ class VocalCoachUI {
         return osc;
     }
 
+    playMetronomeClick(startTime, accent) {
+        const osc = this.audioCtx.createOscillator();
+        const gainNode = this.audioCtx.createGain();
+        const duration = 0.08;
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(accent ? 1200 : 900, startTime);
+
+        gainNode.gain.setValueAtTime(0.0001, startTime);
+        gainNode.gain.linearRampToValueAtTime(accent ? 0.7 : 0.5, startTime + 0.003);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+        osc.connect(gainNode);
+        gainNode.connect(this.audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration + 0.01);
+        return osc;
+    }
+
+    scheduleCountIn(startTime, beatSeconds) {
+        for (let beat = 0; beat < RECORDING_LEAD_IN_BEATS; beat++) {
+            const clickTime = startTime - (RECORDING_LEAD_IN_BEATS - beat) * beatSeconds;
+            this.scheduledSources.push(this.playMetronomeClick(clickTime, beat === 0));
+        }
+    }
 
     async initAudio() {
         if (!this.audioCtx) {
@@ -1159,6 +1255,7 @@ class VocalCoachUI {
         this.setButtonsState(true, true, false);
         this.currentMode = 'playback';
         this.userHistory = [];
+        this.pitchSamples = [];
         this.hoverNote = null;
         this.startTime = this.audioCtx.currentTime;
         this.scheduleArpeggio(usePiano, this.startTime);
@@ -1188,22 +1285,54 @@ class VocalCoachUI {
     async startRecording() {
         await this.initAudio();
         try {
-            this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            this.micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                },
+                video: false
+            });
             const source = this.audioCtx.createMediaStreamSource(this.micStream);
             source.connect(this.analyser);
 
-            const usePiano = await this.ensurePianoSamples();
+            // Now that the microphone permission is granted, device labels are
+            // available; re-run the headphone heuristic and auto-enable the guide.
+            await this.autoEnableGuideForHeadphones();
+
+            const guideOn = this.guideToneToggle ? this.guideToneToggle.checked : false;
+            const usePiano = guideOn ? await this.ensurePianoSamples() : false;
             this.refreshTimeline();
             this.setButtonsState(true, true, false);
             this.currentMode = 'recording';
             this.userHistory = [];
+            this.pitchSamples = [];
+            this.pitchLogState = { lastKind: null, lastLogAt: -Infinity };
+            this.lastTargetNote = null;
             this.hoverNote = null;
-            this.startTime = this.audioCtx.currentTime + RECORDING_LEAD_IN_SECONDS;
-            this.scheduleArpeggio(usePiano, this.startTime);
-            this.setStatus(t('statusRecordingLead', { seconds: RECORDING_LEAD_IN_SECONDS }));
+            const beatSeconds = bpmToSecondsPerBeat(this.activeMelody.bpm) / this.activeSpeed;
+            const countInSeconds = RECORDING_LEAD_IN_BEATS * beatSeconds;
+            const leadInSeconds = SCHEDULING_DELAY_SECONDS + countInSeconds;
+            this.startTime = this.audioCtx.currentTime + leadInSeconds;
+            this.scheduleCountIn(this.startTime, beatSeconds);
+            if (guideOn) {
+                this.scheduleArpeggio(usePiano, this.startTime);
+            }
+            this.setStatus(t('statusRecordingLead', { beats: RECORDING_LEAD_IN_BEATS }));
+            if (DIAGNOSTIC_LOGGING) {
+                console.log('[note-scout] record start melody="' + this.activeMelody.name
+                    + '" sampleRate=' + this.audioCtx.sampleRate
+                    + ' fftSize=' + this.analyser.fftSize
+                    + ' tempoBpm=' + Math.round(this.getTempoBpm())
+                    + ' bpm=' + this.activeMelody.bpm
+                    + ' guide=' + guideOn
+                    + ' leadIn=' + leadInSeconds.toFixed(2) + 's'
+                    + ' rmsGate=' + PITCH_RMS_GATE
+                    + ' corrGate=0.3');
+            }
             window.setTimeout(() => {
                 if (this.currentMode === 'recording') this.setStatus(t('statusRecording'));
-            }, RECORDING_LEAD_IN_SECONDS * 1000);
+            }, leadInSeconds * 1000);
 
             this.renderLoop();
         } catch (err) {
@@ -1212,6 +1341,7 @@ class VocalCoachUI {
     }
 
     stopEngine() {
+        if (DIAGNOSTIC_LOGGING) console.log('[note-scout] record stop');
         this.currentMode = 'idle';
         if (this.micStream) {
             this.micStream.getTracks().forEach(track => track.stop());
@@ -1241,10 +1371,12 @@ class VocalCoachUI {
         document.getElementById('melodyName').disabled = playOff;
         document.getElementById('btnSaveMelody').disabled = playOff;
         document.getElementById('speedRange').disabled = playOff;
+        if (this.guideToneToggle) this.guideToneToggle.disabled = playOff;
         document.getElementById('melodyLinks').classList.toggle('is-disabled', playOff);
     }
 
-    autoCorrelate(buffer, sampleRate) {
+    autoCorrelate(buffer, sampleRate, targetHz) {
+        this.pitchDebug = { reason: null, rms: 0, bestCorrelation: 0, lag: 0, hz: 0, strategy: null };
         const size = buffer.length;
         let mean = 0;
         for (let i = 0; i < size; i++) {
@@ -1260,11 +1392,18 @@ class VocalCoachUI {
             rms += value * value;
         }
         rms = Math.sqrt(rms / size);
-        if (rms < 0.007) return -1; // Gate signal floor noise
+        this.pitchDebug.rms = rms;
+        if (rms < PITCH_RMS_GATE) {
+            this.pitchDebug.reason = 'rms';
+            return -1; // Gate signal floor noise
+        }
 
         const minLag = Math.max(2, Math.floor(sampleRate / 600));
         const maxLag = Math.min(Math.floor(sampleRate / 40), Math.floor(size / 2));
-        if (maxLag <= minLag) return -1;
+        if (maxLag <= minLag) {
+            this.pitchDebug.reason = 'lagrange';
+            return -1;
+        }
 
         const correlation = new Float32Array(maxLag + 2);
         let bestCorrelation = 0;
@@ -1287,11 +1426,56 @@ class VocalCoachUI {
             }
         }
 
-        if (bestCorrelation < 0.3) return -1;
+        this.pitchDebug.bestCorrelation = bestCorrelation;
+        if (bestCorrelation < 0.3) {
+            this.pitchDebug.reason = 'correlation';
+            return -1;
+        }
 
-        // Prefer the first strong peak so harmonics do not produce an octave-low result.
-        const peakThreshold = bestCorrelation * 0.85;
+        // Collect every strong local maximum, then prefer the one closest to the
+        // target note when it is known. The raw first-peak heuristic often locks
+        // onto an overtone (octave/harmonic) when the fundamental is weak.
+        const hzForLag = (lag) => {
+            const y0 = correlation[lag - 1];
+            const y1 = correlation[lag];
+            const y2 = correlation[lag + 1];
+            const curvature = y0 - 2 * y1 + y2;
+            const offset = curvature !== 0 ? 0.5 * (y0 - y2) / curvature : 0;
+            return sampleRate / (lag + Math.max(-0.5, Math.min(0.5, offset)));
+        };
+
+        const candidateThreshold = bestCorrelation * 0.5;
+        const peaks = [];
+        for (let lag = minLag + 1; lag < maxLag; lag++) {
+            if (correlation[lag] >= candidateThreshold
+                && correlation[lag] >= correlation[lag - 1]
+                && correlation[lag] >= correlation[lag + 1]) {
+                peaks.push({ lag: lag, hz: hzForLag(lag), corr: correlation[lag] });
+            }
+        }
+
+        if (targetHz && peaks.length > 0) {
+            let bestPeak = null;
+            let bestDistance = Infinity;
+            peaks.forEach(peak => {
+                const distance = Math.abs(Math.log2(peak.hz / targetHz));
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestPeak = peak;
+                }
+            });
+            if (bestDistance <= 1.0) { // within one octave of the target note
+                this.pitchDebug.reason = 'ok';
+                this.pitchDebug.strategy = 'guided';
+                this.pitchDebug.lag = bestPeak.lag;
+                this.pitchDebug.hz = bestPeak.hz;
+                return bestPeak.hz;
+            }
+        }
+
+        // Fallback: first strong peak (previous behaviour).
         let chosenLag = -1;
+        const peakThreshold = bestCorrelation * 0.85;
         for (let lag = minLag + 1; lag < maxLag; lag++) {
             if (correlation[lag] >= peakThreshold
                 && correlation[lag] >= correlation[lag - 1]
@@ -1308,20 +1492,86 @@ class VocalCoachUI {
                 }
             }
         }
-        if (chosenLag < 0) return -1;
+        if (chosenLag < 0) {
+            this.pitchDebug.reason = 'nopeak';
+            return -1;
+        }
 
-        const y0 = correlation[chosenLag - 1];
-        const y1 = correlation[chosenLag];
-        const y2 = correlation[chosenLag + 1];
-        const curvature = y0 - 2 * y1 + y2;
-        const offset = curvature !== 0 ? 0.5 * (y0 - y2) / curvature : 0;
-        return sampleRate / (chosenLag + Math.max(-0.5, Math.min(0.5, offset)));
+        const hz = hzForLag(chosenLag);
+        this.pitchDebug.reason = 'ok';
+        this.pitchDebug.strategy = 'fallback';
+        this.pitchDebug.lag = chosenLag;
+        this.pitchDebug.hz = hz;
+        return hz;
+    }
+
+    filterPitch(hz, elapsedSeconds) {
+        if (!(hz > 0)) return 0;
+        // Drop samples from before a pause so a new phrase starts a fresh median.
+        if (this.pitchSamples.length > 0
+            && elapsedSeconds - this.pitchSamples[this.pitchSamples.length - 1].time > 0.25) {
+            this.pitchSamples = [];
+        }
+        this.pitchSamples.push({ time: elapsedSeconds, hz: hz });
+        if (this.pitchSamples.length > 5) this.pitchSamples.shift();
+
+        // A short median window removes single/double-frame octave and noise
+        // spikes without smoothing genuine pitch movement.
+        const sorted = this.pitchSamples.slice().sort((a, b) => a.hz - b.hz);
+        return sorted[Math.floor((sorted.length - 1) / 2)].hz;
+    }
+
+    logPitchDiagnostics(elapsedSeconds, measuredHz, userHz, targetNote) {
+        if (!DIAGNOSTIC_LOGGING) return;
+        const d = this.pitchDebug || {};
+        const reason = measuredHz > 0 ? 'ok' : (d.reason || 'invalid');
+        const sinceLast = elapsedSeconds - this.pitchLogState.lastLogAt;
+        const heartbeat = (reason === 'ok' && sinceLast >= 1.0)
+            || (reason !== 'ok' && sinceLast >= 0.5);
+
+        if (reason !== this.pitchLogState.lastKind || heartbeat) {
+            const parts = [
+                't=' + elapsedSeconds.toFixed(2) + 's',
+                'target=' + (targetNote ? targetNote.name : '-'),
+                'reason=' + reason
+            ];
+            if (reason === 'ok') {
+                parts.push(
+                    'raw=' + measuredHz.toFixed(1) + 'Hz',
+                    'smooth=' + (userHz > 0 ? userHz.toFixed(1) + 'Hz' : '-'),
+                    'strat=' + (d.strategy || '-')
+                );
+            }
+            parts.push(
+                'rms=' + (d.rms !== undefined ? d.rms.toFixed(4) : '-'),
+                'corr=' + (d.bestCorrelation !== undefined ? d.bestCorrelation.toFixed(3) : '-')
+            );
+            console.log('[note-scout] ' + parts.join(' '));
+            this.pitchLogState.lastKind = reason;
+            this.pitchLogState.lastLogAt = elapsedSeconds;
+        }
     }
 
     getCurrentTargetNote(elapsedSeconds) {
-        return this.activeNotes.find(
-            n => elapsedSeconds >= n.start && elapsedSeconds <= (n.start + n.duration)
-        ) || null;
+        if (this.activeNotes.length === 0) return null;
+        let closest = null;
+        let bestDistance = Infinity;
+        for (let i = 0; i < this.activeNotes.length; i++) {
+            const note = this.activeNotes[i];
+            let distance = 0;
+            if (elapsedSeconds < note.start) {
+                distance = note.start - elapsedSeconds;
+            } else if (elapsedSeconds > note.start + note.duration) {
+                distance = elapsedSeconds - (note.start + note.duration);
+            }
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                closest = note;
+            }
+        }
+        // A small tolerance bridges floating-point gaps at note boundaries,
+        // which would otherwise hide a frame and break the pitch trail.
+        return bestDistance <= 0.05 ? closest : null;
     }
 
     getCurrentTargetHz(elapsedSeconds) {
@@ -1340,8 +1590,18 @@ class VocalCoachUI {
 
             const buffer = new Float32Array(this.analyser.fftSize);
             this.analyser.getFloatTimeDomainData(buffer);
-            const userHz = this.autoCorrelate(buffer, this.audioCtx.sampleRate);
             const targetNote = this.getCurrentTargetNote(elapsed);
+            if (this.lastTargetNote !== targetNote) {
+                this.pitchSamples = [];
+                this.lastTargetNote = targetNote;
+            }
+            const measuredHz = this.autoCorrelate(
+                buffer,
+                this.audioCtx.sampleRate,
+                targetNote ? targetNote.hz : 0
+            );
+            const userHz = this.filterPitch(measuredHz, elapsed);
+            this.logPitchDiagnostics(elapsed, measuredHz, userHz, targetNote);
 
             if (userHz > 40 && userHz < 600) { // Valid human register gate bounds
                 this.userHistory.push({
@@ -1379,7 +1639,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const loaded = await loadMelodies();
         status.textContent = '';
-        new VocalCoachUI(loaded.melodies, loaded.localMelodyDefs, loaded.secondsPerBeat);
+        new VocalCoachUI(loaded.melodies, loaded.localMelodyDefs, loaded.bpm);
     } catch (err) {
         console.error('Could not load melodies.json.', err);
         status.textContent = t('statusLoadError', { error: err.message });

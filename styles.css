@@ -118,8 +118,29 @@ input[type="range"] {
 }
 #speedValue {
     display: inline-block;
-    min-width: 3.2rem;
+    min-width: 4rem;
     font-variant-numeric: tabular-nums;
+}
+.guide-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 1rem;
+    user-select: none;
+}
+.guide-toggle input[type="checkbox"] {
+    accent-color: #2563eb;
+    cursor: pointer;
+    margin: 0;
+}
+.guide-toggle.is-auto {
+    border-color: #93c5fd;
+    background: #eff6ff;
 }
 .status {
     min-height: 1.25rem;

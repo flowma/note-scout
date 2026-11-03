@@ -2,7 +2,7 @@
 
 A single-page vocal pitch trainer that helps you practice singing in tune. It shows a melody as real staff notation, plays a sampled-piano guide track, records your voice, and plots your pitch trail against each target note in real time.
 
-Everything runs in the browser — no build step, no server-side code.
+Everything runs in the browser — no build step, no server-side code. [Try Online Now](https://flowma.github.io/note-scout/).
 
 ## Features
 
@@ -10,9 +10,9 @@ Everything runs in the browser — no build step, no server-side code.
 - **Clef toggle** — click the clef on the staff to switch between treble 8vb (treble sounding an octave lower) and bass. No toolbar control; the clef itself is the click target.
 - **Two playback modes:**
   - **Listen Track** — plays the target melody so you can memorize the intervals.
-  - **Sing & Record** — captures the microphone, estimates your fundamental frequency (F₀) frame by frame, and plays the guide track in sync.
+  - **Sing & Record** — captures the microphone, estimates your fundamental frequency (F₀) frame by frame, and plays the guide track in sync after a two-beat metronome count-in. A checkbox next to the record button toggles the guide track (off by default, auto-enabled when headphones are detected).
 - **Live pitch feedback** on a time-vs-frequency chart: green for in tune (±35 cents), orange for flat, red for sharp.
-- **Tempo adjustment** (0.40×–1.20×, default 0.60×) that scales every note's timing for both playback and recording.
+- **Tempo adjustment** (40–120 BPM, default 90 BPM) that scales every note's timing for both playback and recording.
 - **Individual note preview** — click any note on the staff or the pitch chart to hear it.
 - **Sampled piano** via the [Salamander Grand Piano V3](https://sfzinstruments.github.io/pianos/salamander/) sample set (CC BY 3.0), with a native sine-oscillator fallback.
 - **Editable melodies** — edit the notes and name inline, then save to `localStorage`. Saved melodies merge with the shipped list and survive reloads.
@@ -34,7 +34,7 @@ Melodies live in [`melodies.json`](melodies.json) as `Pitch:Beats` tokens (scien
 
 ```json
 {
-  "secondsPerBeat": 0.6,
+  "bpm": 90,
   "melodies": [
     {
       "id": "major_triad_root",
@@ -50,10 +50,10 @@ Authoring rules:
 - **One token per note:** `Pitch:Beats`, e.g. `C4:1`, `F#4:0.5`, `Bb3:2`.
 - **Bar separators:** a standalone `|` marks a barline (no note, no duration).
 - **Optional key prefix:** e.g. `Ab major C4:1 D4:1`. Unmarked letters inherit the key signature; use `#`/`b` to override, or `n` to force a natural (e.g. `Bn3`).
-- **Beats:** positive decimal numbers. Real duration is `beats × secondsPerBeat` at 1.00×, then divided by the selected speed.
+- **Beats:** positive decimal numbers. One beat lasts `60 / bpm` seconds at 1.00×, then is divided by the selected speed.
 - Keep notes between **Bb2** and **F#4** (MIDI 46–66) to stay inside the pitch chart.
 
-Browsers-saved melodies are stored under the `noteScout.melodies.v1` key in `localStorage`. For backwards compatibility, melodies saved under the legacy `vocalPitchCoach.melodies.v1` key are also loaded.
+Browsers-saved melodies are stored under the `noteScout.melodies.v1` key in `localStorage`.
 
 ## Files
 

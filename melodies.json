@@ -1,26 +1,31 @@
 {
-  "_readme": "Add melodies below. Each notes string is a space-separated list of Pitch:Beats tokens, for example \"C4:1 D4:1 E4:2\". Pitches use scientific notation (C4, F#4, Bb3). One beat lasts secondsPerBeat seconds at 1.00x speed. Keep notes between Bb2 and F#4 to stay visible in the pitch chart.",
-  "secondsPerBeat": 0.6,
+  "_readme": "Add melodies below. Each notes string is a space-separated list of Pitch:Beats tokens, for example \"C4:1 D4:1 E4:2\". Pitches use scientific notation (C4, F#4, Bb3). Tempo is in bpm (beats per minute). Keep notes between Bb2 and F#4 to stay visible in the pitch chart.",
+  "bpm": 90,
   "melodies": [
     {
       "id": "major_triad_root",
-      "name": "C Major Arpeggio (Root Position)",
-      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1.3333"
+      "name": "C Dur Arpeggio",
+      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1"
     },
     {
       "id": "minor_triad_root",
-      "name": "C Minor Arpeggio (Root Position)",
-      "notes": "C3:1 Eb3:1 G3:1 C4:1 G3:1.3333"
+      "name": "C Moll Arpeggio",
+      "notes": "C3:1 Eb3:1 G3:1 C4:1 G3:1"
     },
     {
       "id": "major_second_inv",
-      "name": "C Major 2nd Inversion Arpeggio",
-      "notes": "G3:1 C4:1 E4:1 C4:1 G3:1.3333"
+      "name": "C Dur 2nd Inversion Arpeggio",
+      "notes": "G3:1 C4:1 E4:1 C4:1 G3:1"
     },
     {
-      "id": "deep1",
-      "name": "Deep In My Soul",
+      "id": "deep",
+      "name": "Deep",
       "notes": "G3:4 G3:4 A3:2 C4:2 C4:4 C4:4 E4:4 C4:4 B3:4 A3:4 A3:4 C4:4 B3:4"
+    },
+    {
+      "id": "water",
+      "name": "Water",
+      "notes": "Ab major C4:4 | C4:4 | B3:3 B3:1 | B3:4 | C4:4 |  B3:4  | B3:4 | C4:3"
     }
   ]
 }
