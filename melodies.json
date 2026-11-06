@@ -1,31 +1,54 @@
 {
-  "_readme": "Add melodies below. Each notes string is a space-separated list of Pitch:Beats tokens, for example \"C4:1 D4:1 E4:2\". Pitches use scientific notation (C4, F#4, Bb3). Tempo is in bpm (beats per minute). Keep notes between Bb2 and F#4 to stay visible in the pitch chart.",
+  "_readme": "Add melodies below. Each notes string is a space-separated list of Pitch:Beats tokens, for example \"C4:1 D4:1 E4:2\". Pitches use scientific notation (C4, F#4, Bb3). Tempo is in bpm (beats per minute). Each melody belongs to a voice group (soprano, alto, tenor, bass). Keep notes inside your voice group's range to stay visible in the pitch chart.",
   "bpm": 90,
   "melodies": [
     {
       "id": "major_triad_root",
       "name": "C Dur Arpeggio",
-      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1"
+      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1",
+      "voice": "tenor"
     },
     {
       "id": "minor_triad_root",
       "name": "C Moll Arpeggio",
-      "notes": "C3:1 Eb3:1 G3:1 C4:1 G3:1"
+      "notes": "C3:1 Eb3:1 G3:1 C4:1 G3:1",
+      "voice": "tenor"
     },
     {
       "id": "major_second_inv",
       "name": "C Dur 2nd Inversion Arpeggio",
-      "notes": "G3:1 C4:1 E4:1 C4:1 G3:1"
+      "notes": "G3:1 C4:1 E4:1 C4:1 G3:1",
+      "voice": "tenor"
     },
     {
       "id": "deep",
       "name": "Deep",
-      "notes": "G3:4 G3:4 A3:2 C4:2 C4:4 C4:4 E4:4 C4:4 B3:4 A3:4 A3:4 C4:4 B3:4"
+      "notes": "G3:4 G3:4 A3:2 C4:2 C4:4 C4:4 E4:4 C4:4 B3:4 A3:4 A3:4 C4:4 B3:4",
+      "voice": "tenor"
     },
     {
       "id": "water",
       "name": "Water",
-      "notes": "Ab major C4:4 | C4:4 | B3:3 B3:1 | B3:4 | C4:4 |  B3:4  | B3:4 | C4:3"
+      "notes": "Ab major C4:4 | C4:4 | B3:3 B3:1 | B3:4 | C4:4 |  B3:4  | B3:4 | C4:3",
+      "voice": "tenor"
+    },
+    {
+      "id": "soprano_arp",
+      "name": "Soprano Arpeggio",
+      "notes": "C4:1 E4:1 G4:1 C5:1 G4:1",
+      "voice": "soprano"
+    },
+    {
+      "id": "alto_arp",
+      "name": "Alt Arpeggio",
+      "notes": "G3:1 C4:1 E4:1 G4:1 E4:1",
+      "voice": "alto"
+    },
+    {
+      "id": "bass_arp",
+      "name": "Bass Arpeggio",
+      "notes": "G2:1 B2:1 D3:1 G3:1 D3:1",
+      "voice": "bass"
     }
   ]
 }

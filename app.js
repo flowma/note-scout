@@ -1,6 +1,5 @@
 const LANG_STORAGE_KEY = 'noteScout.lang';
 const FALLBACK_LANG = 'en';
-const FLAGS = { en: '🇬🇧', de: '🇩🇪' };
 const I18N = window.I18N || {};
 let currentLang = detectLanguage();
 
@@ -44,7 +43,6 @@ function applyTranslations() {
     });
     const langToggle = document.getElementById('langToggle');
     if (langToggle) {
-        langToggle.textContent = FLAGS[currentLang] || FLAGS[FALLBACK_LANG];
         langToggle.setAttribute('aria-label', t('langSwitch'));
         langToggle.setAttribute('title', t('langSwitch'));
     }
@@ -72,19 +70,45 @@ const DIAGNOSTIC_LOGGING = false;
 const NOTE_OFFSETS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const LETTER_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 const CLEFS = {
+    treble: {
+        label: "Treble",
+        vexClef: 'treble',
+        octaveShift: 0,
+        add8vb: false
+    },
     treble8vb: {
         label: "Treble 8vb",
-        glyph: "\uD834\uDD1E",
-        referenceDiatonic: 27,
-        showOctaveDown: true
+        vexClef: 'treble',
+        octaveShift: 1,
+        add8vb: true
     },
     bass: {
         label: "Bass",
-        glyph: "\uD834\uDD22",
-        referenceDiatonic: 22,
-        showOctaveDown: false
+        vexClef: 'bass',
+        octaveShift: 0,
+        add8vb: false
     }
 };
+
+const VOICE_GROUPS = {
+    soprano: { label: 'voiceSoprano', clefs: ['treble'], defaultClef: 'treble', pitchMinMidi: 60, pitchMaxMidi: 80 },
+    alto: { label: 'voiceAlt', clefs: ['treble'], defaultClef: 'treble', pitchMinMidi: 55, pitchMaxMidi: 75 },
+    tenor: { label: 'voiceTenor', clefs: ['treble8vb', 'bass'], defaultClef: 'treble8vb', pitchMinMidi: 46, pitchMaxMidi: 66 },
+    bass: { label: 'voiceBass', clefs: ['bass'], defaultClef: 'bass', pitchMinMidi: 40, pitchMaxMidi: 60 }
+};
+const DEFAULT_VOICE = 'tenor';
+
+function voiceFromUrl() {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (hash.indexOf('voice_') === 0) {
+        const hashVoice = hash.slice('voice_'.length);
+        if (VOICE_GROUPS[hashVoice]) return hashVoice;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const queryVoice = params.get('voice');
+    if (queryVoice && VOICE_GROUPS[queryVoice]) return queryVoice;
+    return null;
+}
 
 function parsePitch(pitch) {
     const match = /^([A-Ga-g])([#bn]?)(-?\d+)$/.exec(pitch);
@@ -333,6 +357,7 @@ async function loadMelodies() {
             rawNotes: definition.notes,
             bpm: melodyBpm,
             source: source,
+            voice: VOICE_GROUPS[definition.voice] ? definition.voice : DEFAULT_VOICE,
             notes: parsed.notes,
             bars: parsed.bars,
             keySpec: parsed.keySpec
@@ -379,7 +404,7 @@ const PIANO_SAMPLES = {
 };
 
 class VocalCoachUI {
-    constructor(melodies, localMelodyDefs, bpm) {
+    constructor(melodies, localMelodyDefs, bpm, voiceGroup) {
         this.scoreHost = document.getElementById('scoreHost');
         this.overlayCanvas = document.getElementById('coachOverlay');
         this.overlayCtx = this.overlayCanvas.getContext('2d');
@@ -406,7 +431,8 @@ class VocalCoachUI {
         this.lastTargetNote = null;
         this.guideToneUserOverridden = false;
         this.melodies = melodies;
-        this.activeMelody = melodies[Object.keys(melodies)[0]];
+        this.voiceGroup = VOICE_GROUPS[voiceGroup] ? voiceGroup : DEFAULT_VOICE;
+        this.activeMelody = this.melodiesForVoice(this.voiceGroup)[0] || melodies[Object.keys(melodies)[0]];
         this.localMelodyDefs = localMelodyDefs || [];
         this.bpm = bpm || DEFAULT_BPM;
         this.activeNotes = [];
@@ -414,16 +440,16 @@ class VocalCoachUI {
         this.activeSpeed = 1.0;
         this.totalDuration = 3.5;
         this.hoverNote = null;
-        this.clefMode = 'treble8vb';
-        this.effectiveClef = 'treble8vb';
+        const voiceCfg = this.getVoiceGroupConfig();
+        this.clefMode = voiceCfg.defaultClef;
 
         this.scale = 1.8;
         this.staveY = -5;
         this.staveWidth = 430;
         this.pitchLeft = 48;
         this.pitchRight = 16;
-        this.pitchMinMidi = 46;
-        this.pitchMaxMidi = 66;
+        this.pitchMinMidi = voiceCfg.pitchMinMidi;
+        this.pitchMaxMidi = voiceCfg.pitchMaxMidi;
         this.vexRenderer = null;
         this.vexContext = null;
         this.vexStave = null;
@@ -455,19 +481,79 @@ class VocalCoachUI {
         document.getElementById('speedValue').textContent = Math.round(this.getTempoBpm()) + ' BPM';
     }
 
+    getVoiceGroupConfig() {
+        return VOICE_GROUPS[this.voiceGroup] || VOICE_GROUPS[DEFAULT_VOICE];
+    }
+
+    melodiesForVoice(voice) {
+        return Object.values(this.melodies).filter(m => (m.voice || DEFAULT_VOICE) === voice);
+    }
+
     getClef() {
         return CLEFS[this.effectiveClef];
     }
 
     updateClef() {
-        this.effectiveClef = this.clefMode;
+        const cfg = this.getVoiceGroupConfig();
+        this.effectiveClef = cfg.clefs.length === 1 ? cfg.clefs[0] : this.clefMode;
     }
 
     toggleClef() {
         if (this.currentMode !== 'idle') return;
+        const cfg = this.getVoiceGroupConfig();
+        if (cfg.clefs.length < 2) return;
         this.clefMode = this.clefMode === 'treble8vb' ? 'bass' : 'treble8vb';
         this.updateClef();
         this.renderStatic();
+    }
+
+    canToggleClef() {
+        return this.getVoiceGroupConfig().clefs.length >= 2;
+    }
+
+    updateVoiceSelect() {
+        const sel = document.getElementById('voiceSelect');
+        if (sel) sel.value = this.voiceGroup;
+    }
+
+    updateUrlForVoice() {
+        try {
+            const hash = '#voice_' + this.voiceGroup;
+            if (window.location.hash !== hash) {
+                window.history.replaceState(null, '', hash);
+            }
+        } catch (err) { /* ignore */ }
+    }
+
+    setVoiceGroup(voice) {
+        if (!VOICE_GROUPS[voice]) voice = DEFAULT_VOICE;
+        this.voiceGroup = voice;
+        const cfg = VOICE_GROUPS[voice];
+        this.clefMode = cfg.defaultClef;
+        this.pitchMinMidi = cfg.pitchMinMidi;
+        this.pitchMaxMidi = cfg.pitchMaxMidi;
+
+        const list = this.melodiesForVoice(voice);
+        if (!list.some(m => m.id === this.activeMelody.id)) {
+            this.activeMelody = list[0] || this.activeMelody;
+        }
+
+        this.userHistory = [];
+        this.pitchSamples = [];
+        this.hoverNote = null;
+        this.hoverPitchNote = null;
+        this.currentNote = null;
+
+        document.getElementById('melodyNotes').value = this.activeMelody.rawNotes;
+        document.getElementById('melodyName').value = this.activeMelody.name;
+
+        this.updateVoiceSelect();
+        this.updateUrlForVoice();
+        this.updateClef();
+        this.refreshTimeline();
+        this.renderMelodyLinks();
+        this.renderStatic();
+        this.setStatus(t('voiceChanged', { voice: t(cfg.label) }));
     }
 
     async initVex() {
@@ -495,8 +581,12 @@ class VocalCoachUI {
 
         const clef = this.getClef();
         this.vexStave = new VexFlow.Stave(10, this.staveY, this.staveWidth);
-        if (clef.label === 'Treble 8vb') {
-            this.vexStave.addClef('treble', 'default', '8vb');
+        if (clef.vexClef === 'treble') {
+            if (clef.add8vb) {
+                this.vexStave.addClef('treble', 'default', '8vb');
+            } else {
+                this.vexStave.addClef('treble');
+            }
         } else {
             this.vexStave.addClef('bass');
         }
@@ -511,11 +601,10 @@ class VocalCoachUI {
         this.overlayCtx.clearRect(0, 0, W, H);
 
         const notes = [];
-        const isTreble = clef.label === 'Treble 8vb';
-        const noteClef = isTreble ? 'treble' : 'bass';
+        const noteClef = clef.vexClef;
         const keyAccidentals = keySignatureAccidentals(this.activeMelody.keySpec);
         this.activeNotes.forEach(note => {
-            const octave = isTreble ? note.octave + 1 : note.octave;
+            const octave = note.octave + clef.octaveShift;
             const key = note.letter.toLowerCase() + (note.accidental || '') + '/' + octave;
             const vexDuration = vexDurationForBeats(note.beats);
             const vexNote = new VexFlow.StaveNote({
@@ -857,7 +946,7 @@ class VocalCoachUI {
         const list = document.getElementById('melodyLinks');
         if (!list) return;
         list.innerHTML = '';
-        Object.values(this.melodies).forEach(melody => {
+        this.melodiesForVoice(this.voiceGroup).forEach(melody => {
             const item = document.createElement('li');
             const link = document.createElement('a');
             link.href = '#' + encodeURIComponent(melody.id);
@@ -928,7 +1017,8 @@ class VocalCoachUI {
             id: id,
             name: name,
             notes: notesText,
-            bpm: this.bpm
+            bpm: this.bpm,
+            voice: this.voiceGroup
         };
         if (existingIndex >= 0) {
             this.localMelodyDefs[existingIndex] = definition;
@@ -943,6 +1033,7 @@ class VocalCoachUI {
             rawNotes: notesText,
             bpm: this.bpm,
             source: 'local',
+            voice: this.voiceGroup,
             notes: parsed.notes,
             bars: parsed.bars,
             keySpec: parsed.keySpec
@@ -971,6 +1062,18 @@ class VocalCoachUI {
         const melodyName = document.getElementById('melodyName');
         melodyNotes.value = this.activeMelody.rawNotes;
         melodyName.value = this.activeMelody.name;
+
+        const voiceSelect = document.getElementById('voiceSelect');
+        if (voiceSelect) {
+            voiceSelect.value = this.voiceGroup;
+            voiceSelect.addEventListener('change', (e) => {
+                if (this.currentMode !== 'idle') {
+                    voiceSelect.value = this.voiceGroup;
+                    return;
+                }
+                this.setVoiceGroup(e.target.value);
+            });
+        }
 
         document.getElementById('btnSaveMelody').addEventListener('click', () => this.saveMelody());
         [melodyNotes, melodyName].forEach(input => {
@@ -1024,7 +1127,7 @@ class VocalCoachUI {
 
         this.scoreHost.addEventListener('mousemove', (e) => {
             const { x, y } = this.getCanvasCoords(e);
-            const overClef = this.hitTestClef(x, y);
+            const overClef = this.hitTestClef(x, y) && this.canToggleClef();
             const note = this.hitTestNote(x, y);
             this.scoreHost.style.cursor = (overClef || note) ? 'pointer' : 'default';
             if (note !== this.hoverNote) {
@@ -1372,6 +1475,8 @@ class VocalCoachUI {
         document.getElementById('btnSaveMelody').disabled = playOff;
         document.getElementById('speedRange').disabled = playOff;
         if (this.guideToneToggle) this.guideToneToggle.disabled = playOff;
+        const voiceSelect = document.getElementById('voiceSelect');
+        if (voiceSelect) voiceSelect.disabled = playOff;
         document.getElementById('melodyLinks').classList.toggle('is-disabled', playOff);
     }
 
@@ -1639,12 +1744,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const loaded = await loadMelodies();
         status.textContent = '';
-        new VocalCoachUI(loaded.melodies, loaded.localMelodyDefs, loaded.bpm);
+        new VocalCoachUI(loaded.melodies, loaded.localMelodyDefs, loaded.bpm, voiceFromUrl());
     } catch (err) {
         console.error('Could not load melodies.json.', err);
         status.textContent = t('statusLoadError', { error: err.message });
         document.getElementById('btnPlay').disabled = true;
         document.getElementById('btnRecord').disabled = true;
         document.getElementById('btnSaveMelody').disabled = true;
+        const voiceSelect = document.getElementById('voiceSelect');
+        if (voiceSelect) voiceSelect.disabled = true;
     }
 });

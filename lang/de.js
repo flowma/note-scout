@@ -2,7 +2,7 @@ window.I18N = window.I18N || {};
 window.I18N.de = {
     appTitle: "Note Scout",
     appHeading: "Note Scout",
-    intro: "Wähle unten einen Melodie-Link, klicke <strong>Titel anhören</strong>, um dir die Melodie einzuprägen, und dann <strong>Singen &amp; Aufnehmen</strong>, um mit der Begleitspur zu singen. Klicke auf den Schlüssel in der Notenzeile, um zwischen Violinschlüssel 8vb und Bassschlüssel zu wechseln. Klicke auf eine beliebige Zielnote, um sie einzeln anzuhören. Verwende beim Aufnehmen Kopfhörer, damit die Begleitspur nicht ins Mikrofon gelangt.",
+    intro: "Wähle deine Stimmlage und dann unten einen Melodie-Link. Klicke <strong>Titel anhören</strong>, um dir die Melodie einzuprägen, und dann <strong>Singen &amp; Aufnehmen</strong>, um mit der Begleitspur zu singen. Klicke auf eine beliebige Zielnote, um sie einzeln anzuhören. Verwende beim Aufnehmen Kopfhörer, damit die Begleitspur nicht ins Mikrofon gelangt.",
     notesLabel: "Noten:",
     nameLabel: "Name:",
     namePlaceholder: "Melodiename",
@@ -22,6 +22,11 @@ window.I18N.de = {
     melodiesAriaLabel: "Melodien",
     savedInBrowser: "In diesem Browser gespeichert",
     langSwitch: "Sprache wechseln",
+    voiceLabel: "Stimmlage",
+    voiceSoprano: "Sopran",
+    voiceAlt: "Alt",
+    voiceTenor: "Tenor",
+    voiceBass: "Bass",
     statusLoaded: "\"{name}\" geladen.",
     statusEnterName: "Gib einen Namen ein, bevor du diese Melodie speicherst.",
     statusEnterNote: "Gib mindestens eine Note ein, bevor du diese Melodie speicherst.",
@@ -33,6 +38,7 @@ window.I18N.de = {
     statusPianoFallback: "Klavier-Samples nicht verfügbar - verwende synthetischen Ersatz.",
     statusRecordingLead: "Aufnahme - {beats} Schläge Einzählen, dann startet die Begleitspur.",
     statusRecording: "Aufnahme...",
+    voiceChanged: "Stimmlage: {voice}",
     statusLoadingMelodies: "Melodien werden geladen...",
     statusLoadError: "melodies.json konnte nicht geladen werden: {error} Stelle diesen Ordner über HTTP bereit (z. B.: python3 -m http.server 8000) und lade die Seite neu.",
     micDenied: "Mikrofon-Zugriff verweigert: {error}"

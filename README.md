@@ -7,7 +7,8 @@ Everything runs in the browser — no build step, no server-side code. [Try Onli
 ## Features
 
 - **Staff notation** rendered with [VexFlow 5](https://github.com/0xfe/vexflow): note heads, stems, accidentals, ledger lines, barlines, and clefs.
-- **Clef toggle** — click the clef on the staff to switch between treble 8vb (treble sounding an octave lower) and bass. No toolbar control; the clef itself is the click target.
+- **Voice groups** — Soprano, Alto, Tenor (default), and Bass. Each voice group has its own clef, pitch-chart range, and melody list. Pick a voice from the dropdown in the header, or deep-link it via the URL (`?voice=tenor` or `#voice_tenor`).
+- **Clef** — Soprano and Alto use treble clef, Bass uses bass clef, and Tenor can switch between treble 8vb (treble sounding an octave lower) and bass by clicking the clef on the staff.
 - **Two playback modes:**
   - **Listen Track** — plays the target melody so you can memorize the intervals.
   - **Sing & Record** — captures the microphone, estimates your fundamental frequency (F₀) frame by frame, and plays the guide track in sync after a two-beat metronome count-in. A checkbox next to the record button toggles the guide track (off by default, auto-enabled when headphones are detected).
@@ -39,7 +40,8 @@ Melodies live in [`melodies.json`](melodies.json) as `Pitch:Beats` tokens (scien
     {
       "id": "major_triad_root",
       "name": "C Major Arpeggio (Root Position)",
-      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1.3333"
+      "notes": "C3:1 E3:1 G3:1 C4:1 G3:1.3333",
+      "voice": "tenor"
     }
   ]
 }
@@ -51,7 +53,8 @@ Authoring rules:
 - **Bar separators:** a standalone `|` marks a barline (no note, no duration).
 - **Optional key prefix:** e.g. `Ab major C4:1 D4:1`. Unmarked letters inherit the key signature; use `#`/`b` to override, or `n` to force a natural (e.g. `Bn3`).
 - **Beats:** positive decimal numbers. One beat lasts `60 / bpm` seconds at 1.00×, then is divided by the selected speed.
-- Keep notes between **Bb2** and **F#4** (MIDI 46–66) to stay inside the pitch chart.
+- **Voice group:** an optional `voice` field (`soprano`, `alto`, `tenor`, or `bass`) assigns the melody to a voice group's list; omitted voices default to `tenor`.
+- Keep notes inside your voice group's range to stay visible in the pitch chart: soprano C4–G5, alto G3–Eb5, tenor Bb2–F#4, bass E2–C4.
 
 Browsers-saved melodies are stored under the `noteScout.melodies.v1` key in `localStorage`.
 

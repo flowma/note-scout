@@ -2,7 +2,7 @@ window.I18N = window.I18N || {};
 window.I18N.en = {
     appTitle: "Note Scout",
     appHeading: "Note Scout",
-    intro: "Select a melody link below, click <strong>Listen Track</strong> to memorize, then click <strong>Sing &amp; Record</strong> to perform with the guide track playing. Click the clef on the staff to switch between treble 8vb and bass. Click any target note to preview it individually. Use headphones while recording to keep the guide track out of the microphone.",
+    intro: "Choose your voice group, then select a melody link below. Click <strong>Listen Track</strong> to memorize, then click <strong>Sing &amp; Record</strong> to perform with the guide track playing. Click any target note to preview it individually. Use headphones while recording to keep the guide track out of the microphone.",
     notesLabel: "Notes:",
     nameLabel: "Name:",
     namePlaceholder: "Melody name",
@@ -22,6 +22,11 @@ window.I18N.en = {
     melodiesAriaLabel: "Melodies",
     savedInBrowser: "Saved in this browser",
     langSwitch: "Switch language",
+    voiceLabel: "Voice group",
+    voiceSoprano: "Soprano",
+    voiceAlt: "Alto",
+    voiceTenor: "Tenor",
+    voiceBass: "Bass",
     statusLoaded: "Loaded \"{name}\".",
     statusEnterName: "Enter a name before saving this melody.",
     statusEnterNote: "Enter at least one note before saving this melody.",
@@ -33,6 +38,7 @@ window.I18N.en = {
     statusPianoFallback: "Piano samples unavailable - using synthesized fallback.",
     statusRecordingLead: "Recording - {beats}-beat count-in, then the guide track starts.",
     statusRecording: "Recording...",
+    voiceChanged: "Voice: {voice}",
     statusLoadingMelodies: "Loading melodies...",
     statusLoadError: "Could not load melodies.json: {error} Serve this folder over HTTP (for example: python3 -m http.server 8000) and reload.",
     micDenied: "Microphone access denied: {error}"

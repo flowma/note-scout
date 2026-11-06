@@ -13,9 +13,28 @@
     <div class="card">
         <div class="header-row">
             <h2 data-i18n="appHeading">Note Scout</h2>
-            <button id="langToggle" class="lang-toggle" type="button" aria-label="Switch language" title="Switch language">🇬🇧</button>
+            <div class="header-controls">
+                <select id="voiceSelect" data-i18n-aria="voiceLabel" data-i18n-title="voiceLabel">
+                    <option value="soprano" data-i18n="voiceSoprano">Soprano</option>
+                    <option value="alto" data-i18n="voiceAlt">Alto</option>
+                    <option value="tenor" data-i18n="voiceTenor">Tenor</option>
+                    <option value="bass" data-i18n="voiceBass">Bass</option>
+                </select>
+                <button id="langToggle" class="lang-toggle" type="button" aria-label="Switch language" title="Switch language">
+                    <svg class="lang-icon" viewBox="0 0 30 20" aria-hidden="true" focusable="false">
+                        <rect width="15" height="20" fill="#000000" />
+                        <rect y="6.7" width="15" height="6.6" fill="#DD0000" />
+                        <rect y="13.3" width="15" height="6.7" fill="#FFCE00" />
+                        <rect x="15" width="15" height="20" fill="#012169" />
+                        <path d="M15 0 L30 20 M30 0 L15 20" stroke="#ffffff" stroke-width="4" />
+                        <path d="M15 0 L30 20 M30 0 L15 20" stroke="#C8102E" stroke-width="2" />
+                        <path d="M22.5 0 V20 M15 10 H30" stroke="#ffffff" stroke-width="4" />
+                        <path d="M22.5 0 V20 M15 10 H30" stroke="#C8102E" stroke-width="2" />
+                    </svg>
+                </button>
+            </div>
         </div>
-        <p data-i18n-html="intro">Select a melody link below, click <strong>Listen Track</strong> to memorize, then click <strong>Sing &amp; Record</strong> to perform with the guide track playing. Click the clef on the staff to switch between treble 8vb and bass. Click any target note to preview it individually. Use headphones while recording to keep the guide track out of the microphone.</p>
+        <p data-i18n-html="intro">Choose your voice group, then select a melody link below. Click <strong>Listen Track</strong> to memorize, then click <strong>Sing &amp; Record</strong> to perform with the guide track playing. Click any target note to preview it individually. Use headphones while recording to keep the guide track out of the microphone.</p>
 
         <div class="controls">
             <label for="melodyNotes"><strong data-i18n="notesLabel">Notes:</strong></label>
